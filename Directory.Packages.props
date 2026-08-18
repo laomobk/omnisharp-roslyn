@@ -42,6 +42,7 @@
         <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(RoslynPackageVersion)" />
         <PackageVersion Include="Microsoft.CodeAnalysis.Features" Version="$(RoslynPackageVersion)" />
         <PackageVersion Include="Microsoft.CodeAnalysis.Scripting" Version="$(RoslynPackageVersion)" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.Scripting.Common" Version="$(RoslynPackageVersion)" />
         <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="$(RoslynPackageVersion)" />
         <PackageVersion Include="Microsoft.CodeAnalysis.ExternalAccess.AspNetCore" Version="$(RoslynPackageVersion)" />
         <PackageVersion Include="Microsoft.CodeAnalysis.ExternalAccess.OmniSharp" Version="$(RoslynPackageVersion)" />
@@ -61,8 +62,6 @@
         <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="$(MicrosoftExtensionPackageVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Options" Version="$(MicrosoftExtensionPackageVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="$(MicrosoftExtensionPackageVersion)" />
-
-        <PackageVersion Include="Microsoft.IO.Redist" Version="6.1.3" />
 
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="$(MicrosoftTestPackageVersion)" />
         <PackageVersion Include="Microsoft.TestPlatform.TranslationLayer" Version="$(MicrosoftTestPackageVersion)" />
@@ -104,12 +103,5 @@
     </ItemGroup>
     <ItemGroup>
         <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
-    </ItemGroup>
-    <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
-        <PackageVersion Include="Microsoft.AspNetCore.Diagnostics" Version="2.3.0" />
-        <PackageVersion Include="Microsoft.AspNetCore.Hosting" Version="2.3.0" />
-        <PackageVersion Include="Microsoft.AspNetCore.Http.Features" Version="2.3.0" />
-        <PackageVersion Include="Microsoft.AspNetCore.Server.Kestrel" Version="2.3.0" />
-        <PackageVersion Include="Microsoft.AspNetCore.Server.Kestrel.Core" Version="2.3.6" />
     </ItemGroup>
 </Project>

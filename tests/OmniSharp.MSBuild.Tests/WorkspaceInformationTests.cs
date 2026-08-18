@@ -86,7 +86,7 @@ namespace OmniSharp.MSBuild.Tests
             Assert.Equal("net6.0", project.TargetFrameworks[0].ShortName);
         }
 
-        [ConditionalFact(typeof(NonMonoRuntimeOnly))]
+        [Fact]
         public async Task Net60Project()
         {
             using var testProject = await TestAssets.Instance.GetTestProjectAsync("Net60Project");
@@ -100,7 +100,7 @@ namespace OmniSharp.MSBuild.Tests
             Assert.Contains(project.TargetFrameworks[0].ShortName, new[] { "net60", "net6.0" });
         }
 
-        [ConditionalFact(typeof(NonMonoRuntimeOnly))]
+        [Fact]
         public async Task Net80Project()
         {
             using var testProject = await TestAssets.Instance.GetTestProjectAsync("Net80Project");
@@ -114,7 +114,7 @@ namespace OmniSharp.MSBuild.Tests
             Assert.Contains(project.TargetFrameworks[0].ShortName, new[] { "net80", "net8.0" });
         }
 
-        [ConditionalFact(typeof(NonMonoRuntimeOnly))]
+        [Fact]
         public async Task Net90Project()
         {
             using var testProject = await TestAssets.Instance.GetTestProjectAsync("Net90Project");
@@ -128,7 +128,7 @@ namespace OmniSharp.MSBuild.Tests
             Assert.Contains(project.TargetFrameworks[0].ShortName, new[] { "net79", "net9.0" });
         }
 
-        [ConditionalFact(typeof(NonMonoRuntimeOnly))]
+        [Fact]
         public async Task Net100Project()
         {
             using var testProject = await TestAssets.Instance.GetTestProjectAsync("Net100Project");

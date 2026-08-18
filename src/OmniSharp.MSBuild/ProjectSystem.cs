@@ -239,9 +239,8 @@ namespace OmniSharp.MSBuild
 
         private static string FindSolutionFilePath(string rootPath, ILogger logger)
         {
-            // currently, Directory.GetFiles on Windows collects files that the file extension has 'sln' prefix, while
-            // GetFiles on Mono looks for an exact match. Use an approach that works for both.
-            // see https://docs.microsoft.com/en-us/dotnet/api/system.io.directory.getfiles?view=netframework-4.7.2 ('Note' description)
+            // Directory.GetFiles may return extensions that only start with the pattern on some file systems.
+            // Filter the extension explicitly to keep solution discovery consistent across platforms.
             var solutionsFilePaths = Directory.GetFiles(rootPath, "*.sln").Where(x => Path.GetExtension(x).Equals(".sln", StringComparison.OrdinalIgnoreCase)).ToArray();
             var solutionFiltersFilePaths = Directory.GetFiles(rootPath, "*.slnf").Where(x => Path.GetExtension(x).Equals(".slnf", StringComparison.OrdinalIgnoreCase)).ToArray();
             var result = SolutionSelector.Pick(solutionsFilePaths.Concat(solutionFiltersFilePaths).ToArray(), rootPath);

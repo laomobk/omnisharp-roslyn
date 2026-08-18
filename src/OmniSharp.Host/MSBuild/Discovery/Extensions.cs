@@ -20,14 +20,7 @@ namespace OmniSharp.MSBuild.Discovery
             {
                 if (bestInstanceFound.Version < minimumMSBuildVersion)
                 {
-                    if (bestInstanceFound.DiscoveryType == DiscoveryType.Mono)
-                    {
-                        logger.LogWarning(
-                            $@"It looks like you have Mono installed which contains a MSBuild lower than {minimumMSBuildVersion} which is the minimum supported by the configured .NET Core Sdk.
- Try updating Mono to the latest stable or preview version to enable better .NET Core Sdk support."
-                        );
-                    }
-                    else if (bestInstanceFound.DiscoveryType == DiscoveryType.VisualStudioSetup)
+                    if (bestInstanceFound.DiscoveryType == DiscoveryType.VisualStudioSetup)
                     {
                         logger.LogWarning(
                             $@"It looks like you have Visual Studio 2019 installed which contains a MSBuild lower than {minimumMSBuildVersion} which is the minimum supported by the configured .NET Core Sdk.

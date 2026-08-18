@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net6.0;net472</TargetFrameworks>
+        <TargetFramework>net8.0</TargetFramework>
         <PlatformTarget>AnyCPU</PlatformTarget>
     </PropertyGroup>
 
@@ -10,14 +10,10 @@
         <ProjectReference Include="..\OmniSharp.Roslyn\OmniSharp.Roslyn.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
-    </ItemGroup>
-
     <!-- New VSTest 'dotnet test' support -->
     <ItemGroup>
         <PackageReference Include="Microsoft.TestPlatform.TranslationLayer" />
-        <PackageReference Condition="'$(TargetFramework)' == 'net6.0'" Include="Microsoft.TestPlatform.ObjectModel" />
+        <PackageReference Include="Microsoft.TestPlatform.ObjectModel" />
     </ItemGroup>
 
 </Project>

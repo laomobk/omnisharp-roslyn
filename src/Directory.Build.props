@@ -1,12 +1,26 @@
 <Project>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
+  <PropertyGroup>
+    <UseRoslynNetStandardAssets Condition="'$(MSBuildProjectName)' == 'OmniSharp.Cake' Or
+                                             '$(MSBuildProjectName)' == 'OmniSharp.DotNetTest' Or
+                                             '$(MSBuildProjectName)' == 'OmniSharp.Host' Or
+                                             '$(MSBuildProjectName)' == 'OmniSharp.Http.Driver' Or
+                                             '$(MSBuildProjectName)' == 'OmniSharp.LanguageServerProtocol' Or
+                                             '$(MSBuildProjectName)' == 'OmniSharp.MSBuild' Or
+                                             '$(MSBuildProjectName)' == 'OmniSharp.Roslyn' Or
+                                             '$(MSBuildProjectName)' == 'OmniSharp.Roslyn.CSharp' Or
+                                             '$(MSBuildProjectName)' == 'OmniSharp.Script' Or
+                                             '$(MSBuildProjectName)' == 'OmniSharp.Stdio.Driver'">true</UseRoslynNetStandardAssets>
+  </PropertyGroup>
+
   <!--
-      Because the Roslyn's OmniSharp.ExternalAccess libraries are compiled against .NET Standard 2.0,
-      we need to reference the .NET Standard 2.0 versions of the Roslyn assemblies. Since our test projects
-      are built against .NET 8, they will pick up the .NET version of the Roslyn assemblies by default.
-    -->
-  <ItemGroup>
+      Roslyn's OmniSharp ExternalAccess assemblies target .NET Standard 2.0 and
+      use internal APIs from the matching Roslyn assets. A net8.0 project would
+      otherwise select Roslyn's net8.0 assets, whose internal API signatures are
+      different, and fail at startup with MissingMethodException.
+  -->
+  <ItemGroup Condition="'$(UseRoslynNetStandardAssets)' == 'true'">
     <PackageReference Include="Microsoft.CodeAnalysis.Common" ExcludeAssets="Compile;Runtime" GeneratePathProperty="true" />
     <Reference Include="Microsoft.CodeAnalysis">
       <HintPath>$(PkgMicrosoft_CodeAnalysis_Common)\lib\netstandard2.0\Microsoft.CodeAnalysis.dll</HintPath>

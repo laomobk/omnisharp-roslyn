@@ -11,7 +11,6 @@ PublishProfiles/
 *.cache
 *.docstates
 _ReSharper.*
-nuget.exe
 *net45.csproj
 *net451.csproj
 *k10.csproj
@@ -38,15 +37,11 @@ scripts/Omnisharp*
 
 # Build folder
 .dotnet/
-.dotnet-legacy/
-.dotnet-future/
-.mono/
 tools/*
-!tools/packages.config
 
 # Test assets
 test-assets/**/tools/*
-!test-assets/**/tools/packages.config
+!test-assets/**/tools/CakeProject.Tools.csproj
 
 # VS Code
 /.vscode/settings.json

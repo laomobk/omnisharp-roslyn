@@ -50,7 +50,8 @@ public string GetScriptPath(string scriptFolder, string name)
 
 private string GetOmniSharpPath(string outputRoot)
 {
-    return CombinePaths(PathHelper.GetFullPath(outputRoot), "OmniSharp.exe");
+    var fileName = Platform.Current.IsWindows ? "OmniSharp.exe" : "OmniSharp.dll";
+    return CombinePaths(PathHelper.GetFullPath(outputRoot), fileName);
 }
 
 private string[] GetScriptContent(string omniSharpPath)
@@ -78,7 +79,7 @@ private string[] GetScriptContent(string omniSharpPath)
     }
     else
     {
-        lines.Add($"mono --assembly-loader=strict \"{omniSharpPath}\" {arguments}");
+        lines.Add($"dotnet \"{omniSharpPath}\" {arguments}");
     }
 
     return lines.ToArray();

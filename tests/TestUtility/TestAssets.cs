@@ -104,25 +104,11 @@ namespace TestUtility
 
             await CopyDirectoryAsync(new DirectoryInfo(sourceDirectory), new DirectoryInfo(targetDirectory));
 
-#if NET
             if (!File.Exists(Path.Combine(baseDirectory, "global.json")))
             {
                 var globalJsonFileInfo = new FileInfo(Path.Combine(testProjectsFolder, "global.net.json"));
                 await CopyFileAsync(globalJsonFileInfo, new DirectoryInfo(baseDirectory), "global.json");
             }
-#else
-            if (PlatformHelper.IsMono)
-            {
-                // Copy global.json to the base directory when running on Mono to ensure a compatible SDK is used.
-                var globalJsonFileInfo = new FileInfo(Path.Combine(testProjectsFolder, "global.mono.json"));
-                await CopyFileAsync(globalJsonFileInfo, new DirectoryInfo(baseDirectory), "global.json");
-            }
-            else
-            {
-                var globalJsonFileInfo = new FileInfo(Path.Combine(testProjectsFolder, "global.netfx.json"));
-                await CopyFileAsync(globalJsonFileInfo, new DirectoryInfo(baseDirectory), "global.json");
-            }
-#endif
 
             return new TestProject(name, baseDirectory, targetDirectory, shadowCopied: true);
         }

@@ -3,12 +3,6 @@
 #load "scripts/archiving.cake"
 #load "scripts/artifacts.cake"
 #load "scripts/platform.cake"
-#load "scripts/validation.cake"
-
-using System.ComponentModel;
-using System.Net;
-using System.Reflection;
-using System.Xml;
 
 // Arguments
 var target = Argument("target", "Default");
@@ -18,7 +12,6 @@ var installFolder = Argument("install-path",
 var publishAll = HasArgument("publish-all");
 var useGlobalDotNetSdk = HasArgument("use-global-dotnet-sdk");
 var testProjectArgument = Argument("test-project", "");
-var useDotNetTest = HasArgument("use-dotnet-test");
 
 Log.Context = Context;
 
@@ -61,7 +54,6 @@ Task("GitVersion")
 ///  Pre-build setup tasks.
 /// </summary>
 Task("Setup")
-    .IsDependentOn("ValidateMono")
     .IsDependentOn("InstallDotNetSdk");
 
 void InstallDotNetSdk(BuildEnvironment env, BuildPlan plan, string version, string installFolder, bool sharedRuntime = false, bool noPath = false)
@@ -134,13 +126,6 @@ Task("InstallDotNetSdk")
     Run(env.DotNetCommand, "--info");
 });
 
-Task("ValidateMono")
-    .WithCriteria(() => !Platform.Current.IsWindows)
-    .Does(() =>
-{
-    ValidateMonoVersion(buildPlan);
-});
-
 /// <summary>
 ///  Prepare test assets.
 /// </summary>
@@ -211,17 +196,15 @@ Task("PrepareTestAssets:CakeTestAssets")
     {
         Information("Restoring: {0}...", project);
 
-        var toolsFolder = CombinePaths(env.Folders.TestAssets, "test-projects", project, "tools");
-        var packagesConfig = CombinePaths(toolsFolder, "packages.config");
+        var projectFolder = CombinePaths(env.Folders.TestAssets, "test-projects", project);
+        var toolsFolder = CombinePaths(projectFolder, "tools");
+        var toolsProject = CombinePaths(toolsFolder, "CakeProject.Tools.csproj");
 
-        NuGetInstallFromConfig(packagesConfig, new NuGetInstallSettings
+        DotNetRestore(toolsProject, new DotNetRestoreSettings
         {
-            OutputDirectory = toolsFolder,
-            Prerelease = true,
-            Verbosity = NuGetVerbosity.Quiet,
-            Source = new[] {
-                "https://api.nuget.org/v3/index.json"
-            }
+            WorkingDirectory = projectFolder,
+            PackagesDirectory = toolsFolder,
+            Verbosity = DotNetVerbosity.Minimal
         });
     });
 
@@ -264,8 +247,7 @@ void BuildWithDotNetCli(BuildEnvironment env, string configuration)
         .WithProperty("AssemblyVersion", env.VersionInfo.AssemblySemVer)
         .WithProperty("FileVersion", env.VersionInfo.AssemblySemVer)
         .WithProperty("InformationalVersion", env.VersionInfo.InformationalVersion)
-        .WithProperty("RuntimeFrameworkVersion", "6.0.0-preview.7.21317.1") // Set the minimum runtime to a .NET 6 prerelease so that prerelease SDKs will be considered during rollForward.
-        .WithProperty("RollForward", "LatestMajor");
+        .WithProperty("RollForward", "LatestMinor");
 
     DotNetMSBuild("OmniSharp.sln", settings);
 }
@@ -294,14 +276,9 @@ Task("Test")
     .IsDependentOn("PrepareTestAssets")
     .Does(() =>
 {
-    var testTargetFramework = useDotNetTest ? "net10.0" : "net472";
+    var testTargetFramework = "net8.0";
     var testProjects = string.IsNullOrEmpty(testProjectArgument) ? buildPlan.TestProjects : testProjectArgument.Split(',');
     var environment = new Dictionary<string, string>();
-
-    if (!useDotNetTest && Platform.Current.IsWindows)
-    {
-        environment.Add("DOTNET_PATH", env.Folders.DotNetSdk);
-    }
 
     foreach (var testProject in testProjects)
     {
@@ -309,67 +286,15 @@ Task("Test")
         var instanceFolder = CombinePaths(env.Folders.Bin, configuration, testProject, testTargetFramework);
         var targetPath = CombinePaths(instanceFolder, $"{testProject}.dll");
 
-        if (useDotNetTest || Platform.Current.IsWindows)
-        {
-            var logFile = CombinePaths(env.Folders.ArtifactsLogs, $"{testProject}-netsdk-result.xml");
-            var arguments = $"test \"{targetPath}\" --logger \"console;verbosity=normal\" --logger \"trx;LogFileName={logFile}\" --blame-hang-timeout 60sec";
+        var logFile = CombinePaths(env.Folders.ArtifactsLogs, $"{testProject}-netsdk-result.xml");
+        var arguments = $"test \"{targetPath}\" --logger \"console;verbosity=normal\" --logger \"trx;LogFileName={logFile}\" --blame-hang-timeout 60sec";
 
-            Console.WriteLine($"Executing: dotnet {arguments}");
+        Console.WriteLine($"Executing: dotnet {arguments}");
 
-            Run("dotnet", arguments, new RunOptions(workingDirectory: instanceFolder, environment: environment))
-                .ExceptionOnError($"Test {testProject} failed for {testTargetFramework}");
-        }
-        else
-        {
-            var logFile = CombinePaths(env.Folders.ArtifactsLogs, $"{testProject}-desktop-result.xml");
-
-            // Copy xunit executable to test folder to solve path errors
-            var xunitToolsFolder = CombinePaths(env.Folders.Tools, "xunit.runner.console", "tools", "net472");
-            var xunitInstancePath = CombinePaths(instanceFolder, "xunit.console.exe");
-            FileHelper.Copy(CombinePaths(xunitToolsFolder, "xunit.console.exe"), xunitInstancePath, overwrite: true);
-            FileHelper.Copy(CombinePaths(xunitToolsFolder, "xunit.runner.utility.net452.dll"), CombinePaths(instanceFolder, "xunit.runner.utility.net452.dll"), overwrite: true);
-            var arguments = $"\"{targetPath}\" -noshadow -parallel none -xml \"{logFile}\" -notrait category=failing";
-
-            if (Platform.Current.IsWindows)
-            {
-                Run(xunitInstancePath, arguments, instanceFolder)
-                    .ExceptionOnError($"Test {testProject} failed for {testTargetFramework}");
-            }
-            else
-            {
-                // Copy the Mono-built Microsoft.Build.* binaries to the test folder.
-                // This is necessary to work around a Mono bug that is exasperated by xUnit.
-                CopyMonoMSBuildBinaries(instanceFolder);
-
-                Run("mono", $"\"{xunitInstancePath}\" {arguments}", instanceFolder)
-                    .ExceptionOnError($"Test {testProject} failed for net472");
-            }
-        }
+        Run("dotnet", arguments, new RunOptions(workingDirectory: instanceFolder, environment: environment))
+            .ExceptionOnError($"Test {testProject} failed for {testTargetFramework}");
     }
 });
-
-void CopyMonoMSBuildBinaries(string outputFolder)
-{
-    var monoBasePath = Platform.Current.IsMacOS
-        ? "/Library/Frameworks/Mono.framework/Versions/Current/lib/mono"
-        : "/usr/lib/mono";
-    var monoMSBuildPath = $"{monoBasePath}/msbuild/Current/bin";
-    DirectoryHelper.Copy(monoMSBuildPath, outputFolder, replaceFiles: false);
-
-    // Copy dependencies of Mono build
-    FileHelper.Copy(
-        source: CombinePaths(env.Folders.Tools, "SQLitePCLRaw.core", "lib", "netstandard2.0", "SQLitePCLRaw.core.dll"),
-        destination: CombinePaths(outputFolder, "SQLitePCLRaw.core.dll"),
-        overwrite: true);
-    FileHelper.Copy(
-        source: CombinePaths(env.Folders.Tools, "SQLitePCLRaw.provider.e_sqlite3", "lib", "netstandard2.0", "SQLitePCLRaw.provider.e_sqlite3.dll"),
-        destination: CombinePaths(outputFolder, "SQLitePCLRaw.provider.e_sqlite3.dll"),
-        overwrite: true);
-    FileHelper.Copy(
-        source: CombinePaths(env.Folders.Tools, "SQLitePCLRaw.bundle_green", "lib", "netstandard2.0", "SQLitePCLRaw.batteries_v2.dll"),
-        destination: CombinePaths(outputFolder, "SQLitePCLRaw.batteries_v2.dll"),
-        overwrite: true);
-}
 
 void CopyExtraDependencies(BuildEnvironment env, string outputFolder)
 {
@@ -377,146 +302,22 @@ void CopyExtraDependencies(BuildEnvironment env, string outputFolder)
     FileHelper.Copy(CombinePaths(env.WorkingDirectory, "license.md"), CombinePaths(outputFolder, "license.md"), overwrite: true);
 }
 
-void UpdateBindingRedirects(string omnisharpFolder)
+string GetCurrentRuntimeIdentifier()
 {
-    var appConfig = CombinePaths(omnisharpFolder, "OmniSharp.exe.config");
-    if (!FileHelper.Exists(appConfig))
+    if (Platform.Current.IsWindows)
     {
-        appConfig = CombinePaths(omnisharpFolder, "OmniSharp.dll.config");
+        return Platform.Current.IsX86 ? "win-x86" : Platform.Current.IsX64 ? "win-x64" : "win-arm64";
     }
 
-    // Load app.config
-    var document = new XmlDocument();
-    document.Load(appConfig);
-
-    // Find bindings
-    var runtime = document.GetElementsByTagName("runtime")[0];
-    var assemblyBinding = document.CreateElement("assemblyBinding", "urn:schemas-microsoft-com:asm.v1");
-
-    // Find OmniSharp libraries
-    foreach (var filePath in System.IO.Directory.GetFiles(omnisharpFolder, "OmniSharp.*.dll"))
+    if (Platform.Current.IsMacOS)
     {
-        // Read assembly name from OmniSharp library
-        var assemblyName = AssemblyName.GetAssemblyName(filePath);
-
-        // Create binding redirect and add to bindings
-        var redirect = CreateBindingRedirect(document, assemblyName);
-        assemblyBinding.AppendChild(redirect);
+        return Platform.Current.IsArm64 ? "osx-arm64" : "osx-x64";
     }
 
-    // Find Roslyn libraries
-    foreach (var filePath in System.IO.Directory.GetFiles(omnisharpFolder, "Microsoft.CodeAnalysis.*.dll"))
-    {
-        // Read assembly name from Roslyn library
-        var assemblyName = AssemblyName.GetAssemblyName(filePath);
-
-        // Create binding redirect and add to bindings
-        var redirect = CreateBindingRedirect(document, assemblyName);
-        assemblyBinding.AppendChild(redirect);
-    }
-
-    runtime.AppendChild(assemblyBinding);
-
-    // Save updated app.config
-    document.Save(appConfig);
+    return Platform.Current.IsArm64 ? "linux-arm64" : "linux-x64";
 }
 
-XmlElement CreateBindingRedirect(XmlDocument document, AssemblyName assemblyName)
-{
-    var dependentAssembly = document.CreateElement("dependentAssembly", "urn:schemas-microsoft-com:asm.v1");
-
-    var assemblyIdentity = document.CreateElement("assemblyIdentity", "urn:schemas-microsoft-com:asm.v1");
-    assemblyIdentity.SetAttribute("name", assemblyName.Name);
-    var publicKeyToken = BitConverter.ToString(assemblyName.GetPublicKeyToken()).Replace("-", string.Empty).ToLower();
-    assemblyIdentity.SetAttribute("publicKeyToken", publicKeyToken);
-    assemblyIdentity.SetAttribute("culture", "neutral");
-    dependentAssembly.AppendChild(assemblyIdentity);
-
-    var bindingRedirect = document.CreateElement("bindingRedirect", "urn:schemas-microsoft-com:asm.v1");
-    bindingRedirect.SetAttribute("oldVersion", $"0.0.0.0-{assemblyName.Version}");
-    bindingRedirect.SetAttribute("newVersion", assemblyName.Version.ToString());
-    dependentAssembly.AppendChild(bindingRedirect);
-
-    return dependentAssembly;
-}
-
-string PublishMonoBuild(string project, BuildEnvironment env, BuildPlan plan, string configuration)
-{
-    Information($"Publishing Mono build for {project}...");
-
-    var outputFolder = CombinePaths(env.Folders.ArtifactsPublish, project, "mono");
-
-    var buildFolder = CombinePaths(env.Folders.Bin, configuration, project, "net472");
-
-    DirectoryHelper.Copy(buildFolder, outputFolder, copySubDirectories: false);
-
-    CopyExtraDependencies(env, outputFolder);
-    UpdateBindingRedirects(outputFolder);
-
-    // Copy dependencies of Mono build
-    FileHelper.Copy(
-        source: CombinePaths(env.Folders.Tools, "SQLitePCLRaw.core", "lib", "netstandard2.0", "SQLitePCLRaw.core.dll"),
-        destination: CombinePaths(outputFolder, "SQLitePCLRaw.core.dll"),
-        overwrite: true);
-    FileHelper.Copy(
-        source: CombinePaths(env.Folders.Tools, "SQLitePCLRaw.provider.e_sqlite3", "lib", "netstandard2.0", "SQLitePCLRaw.provider.e_sqlite3.dll"),
-        destination: CombinePaths(outputFolder, "SQLitePCLRaw.provider.e_sqlite3.dll"),
-        overwrite: true);
-    FileHelper.Copy(
-        source: CombinePaths(env.Folders.Tools, "SQLitePCLRaw.bundle_green", "lib", "netstandard2.0", "SQLitePCLRaw.batteries_v2.dll"),
-        destination: CombinePaths(outputFolder, "SQLitePCLRaw.batteries_v2.dll"),
-        overwrite: true);
-
-    Package(project, "mono", outputFolder, env.Folders.ArtifactsPackage, env.Folders.DeploymentPackage);
-
-    return outputFolder;
-}
-
-string PublishMonoBuildForPlatform(string project, MonoRuntime monoRuntime, BuildEnvironment env, BuildPlan plan)
-{
-    Information("Publishing platform-specific Mono build: {0}", monoRuntime.PlatformName);
-
-    var outputFolder = CombinePaths(env.Folders.ArtifactsPublish, project, monoRuntime.PlatformName);
-
-    var sourceFolder = CombinePaths(env.Folders.ArtifactsPublish, project, "mono");
-    var omnisharpFolder = CombinePaths(outputFolder, "omnisharp");
-
-    DirectoryHelper.Copy(sourceFolder, omnisharpFolder, copySubDirectories: false);
-
-    var runScriptFile = CombinePaths(env.Folders.MonoPackaging, "run");
-    FileHelper.Copy(runScriptFile, CombinePaths(outputFolder, "run"), overwrite: true);
-    Run("chmod", $"+x \"{CombinePaths(outputFolder, "run")}\"");
-
-    CopyExtraDependencies(env, outputFolder);
-    UpdateBindingRedirects(omnisharpFolder);
-
-    Package(project, monoRuntime.PlatformName, outputFolder, env.Folders.ArtifactsPackage, env.Folders.DeploymentPackage);
-
-    return outputFolder;
-}
-
-Task("PublishMonoBuilds")
-    .IsDependentOn("Setup")
-    .WithCriteria(() => !Platform.Current.IsWindows)
-    .Does(() =>
-{
-    foreach (var project in buildPlan.HostProjects)
-    {
-        var outputFolder = PublishMonoBuild(project, env, buildPlan, configuration);
-
-        CreateRunScript(project, outputFolder, env.Folders.ArtifactsScripts);
-
-        if (publishAll)
-        {
-            foreach (var monoRuntime in env.BuildMonoRuntimes)
-            {
-                PublishMonoBuildForPlatform(project, monoRuntime, env, buildPlan);
-            }
-        }
-    }
-});
-
-Task("PublishNet6Builds")
+Task("PublishNet8Builds")
     .IsDependentOn("Setup")
     .Does(() =>
 {
@@ -526,54 +327,58 @@ Task("PublishNet6Builds")
         {
             if (Platform.Current.IsWindows)
             {
-                PublishBuild(project, env, buildPlan, configuration, "win7-x86", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "win7-x64", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "win10-arm64", "net6.0");
+                PublishBuild(project, env, buildPlan, configuration, "win-x86", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "win-x64", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "win-arm64", "net8.0");
             }
             else if (Platform.Current.IsMacOS)
             {
-                PublishBuild(project, env, buildPlan, configuration, "osx-x64", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "osx-arm64", "net6.0");
+                PublishBuild(project, env, buildPlan, configuration, "osx-x64", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "osx-arm64", "net8.0");
             }
             else
             {
-                PublishBuild(project, env, buildPlan, configuration, "linux-x64", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "linux-arm64", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "linux-musl-x64", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "linux-musl-arm64", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "linux-bionic-arm64", "net6.0");
+                PublishBuild(project, env, buildPlan, configuration, "linux-x64", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "linux-arm64", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "linux-musl-x64", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "linux-musl-arm64", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "linux-bionic-arm64", "net8.0");
             }
         }
         else if (Platform.Current.IsWindows)
         {
             if (Platform.Current.IsX86)
             {
-                PublishBuild(project, env, buildPlan, configuration, "win7-x86", "net6.0");
+                PublishBuild(project, env, buildPlan, configuration, "win-x86", "net8.0");
             }
             else if (Platform.Current.IsX64)
             {
-                PublishBuild(project, env, buildPlan, configuration, "win7-x64", "net6.0");
+                PublishBuild(project, env, buildPlan, configuration, "win-x64", "net8.0");
             }
             else
             {
-                PublishBuild(project, env, buildPlan, configuration, "win10-arm64", "net6.0");
+                PublishBuild(project, env, buildPlan, configuration, "win-arm64", "net8.0");
             }
         }
         else
         {
             if (Platform.Current.IsMacOS)
             {
-                PublishBuild(project, env, buildPlan, configuration, "osx-x64", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "osx-arm64", "net6.0");
+                PublishBuild(project, env, buildPlan, configuration, "osx-x64", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "osx-arm64", "net8.0");
             }
             else
             {
-                PublishBuild(project, env, buildPlan, configuration, "linux-x64", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "linux-arm64", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "linux-musl-x64", "net6.0");
-                PublishBuild(project, env, buildPlan, configuration, "linux-musl-arm64", "net6.0");
+                PublishBuild(project, env, buildPlan, configuration, "linux-x64", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "linux-arm64", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "linux-musl-x64", "net8.0");
+                PublishBuild(project, env, buildPlan, configuration, "linux-musl-arm64", "net8.0");
             }
         }
+
+        var currentRid = GetCurrentRuntimeIdentifier();
+        var currentOutputFolder = CombinePaths(env.Folders.ArtifactsPublish, project, currentRid, "net8.0");
+        CreateRunScript(project, currentOutputFolder, env.Folders.ArtifactsScripts);
     }
 });
 
@@ -592,7 +397,7 @@ string PublishBuild(string project, BuildEnvironment env, BuildPlan plan, string
             Framework = framework,
             Runtime = rid, // TODO: With everything today do we need to publish this with a rid?  This appears to be legacy bit when we used to push for all supported dotnet core rids.
             PublishReadyToRun = true, // Improve startup performance by applying some AOT compilation
-            SelfContained = false, // Since we are specifying a runtime identifier this defaults to true. We don't need to ship a runtime for net6 because we require the .NET SDK to be installed.
+            SelfContained = false, // The installed .NET 8 runtime is required by the deployment.
             Configuration = configuration,
             OutputDirectory = outputFolder,
             MSBuildSettings = new DotNetMSBuildSettings()
@@ -600,8 +405,7 @@ string PublishBuild(string project, BuildEnvironment env, BuildPlan plan, string
                 .WithProperty("AssemblyVersion", env.VersionInfo.AssemblySemVer)
                 .WithProperty("FileVersion", env.VersionInfo.AssemblySemVer)
                 .WithProperty("InformationalVersion", env.VersionInfo.InformationalVersion)
-                .WithProperty("RuntimeFrameworkVersion", "6.0.0-preview.7.21317.1") // Set the minimum runtime to a .NET 6 prerelease so that prerelease SDKs will be considered during rollForward.
-                .WithProperty("RollForward", "LatestMajor"),
+                .WithProperty("RollForward", "LatestMinor"),
             ToolPath = env.DotNetCommand,
             WorkingDirectory = env.WorkingDirectory,
             Verbosity = DotNetVerbosity.Minimal,
@@ -615,51 +419,11 @@ string PublishBuild(string project, BuildEnvironment env, BuildPlan plan, string
     }
 
     CopyExtraDependencies(env, outputFolder);
-    UpdateBindingRedirects(outputFolder);
-
-    var platformFolder = framework != "net472" ? $"{rid}-{framework}" : rid;
+    var platformFolder = $"{rid}-{framework}";
     Package(project, platformFolder, outputFolder, env.Folders.ArtifactsPackage, env.Folders.DeploymentPackage);
 
     return outputFolder;
 }
-
-Task("PublishWindowsBuilds")
-    .WithCriteria(() => Platform.Current.IsWindows)
-    .IsDependentOn("Setup")
-    .Does(() =>
-{
-    foreach (var project in buildPlan.HostProjects)
-    {
-        string outputFolder;
-
-        if (publishAll)
-        {
-            var outputFolderX86 = PublishBuild(project, env, buildPlan, configuration, "win7-x86", "net472");
-            var outputFolderX64 = PublishBuild(project, env, buildPlan, configuration, "win7-x64", "net472");
-            var outputFolderArm64 = PublishBuild(project, env, buildPlan, configuration, "win10-arm64", "net472");
-
-            outputFolder = Platform.Current.IsX86
-                ? outputFolderX86
-                : Platform.Current.IsX64
-                    ? outputFolderX64
-                    : outputFolderArm64;
-        }
-        else if (Platform.Current.IsX86)
-        {
-            outputFolder = PublishBuild(project, env, buildPlan, configuration, "win7-x86", "net472");
-        }
-        else if (Platform.Current.IsX64)
-        {
-            outputFolder = PublishBuild(project, env, buildPlan, configuration, "win7-x64", "net472");
-        }
-        else
-        {
-            outputFolder = PublishBuild(project, env, buildPlan, configuration, "win10-arm64", "net472");
-        }
-
-        CreateRunScript(project, outputFolder, env.Folders.ArtifactsScripts);
-    }
-});
 
 Task("PublishNuGet")
     .IsDependentOn("InstallDotNetSdk")
@@ -680,9 +444,7 @@ Task("PublishNuGet")
 
 Task("Publish")
     .IsDependentOn("Build")
-    .IsDependentOn("PublishMonoBuilds")
-    .IsDependentOn("PublishNet6Builds")
-    .IsDependentOn("PublishWindowsBuilds")
+    .IsDependentOn("PublishNet8Builds")
     .IsDependentOn("PublishNuGet");
 
 /// <summary>
@@ -736,21 +498,11 @@ Task("Install")
 {
     foreach (var project in buildPlan.HostProjects)
     {
-        string platform;
-        if (Platform.Current.IsWindows)
-        {
-            platform = Platform.Current.IsX86
-                ? "win7-x86"
-                : Platform.Current.IsX64
-                    ? "win7-x64"
-                    : "win10-arm64";
-        }
-        else
-        {
-            platform = "mono";
-        }
-
-        var outputFolder = PathHelper.GetFullPath(CombinePaths(env.Folders.ArtifactsPublish, project, platform));
+        var outputFolder = PathHelper.GetFullPath(CombinePaths(
+            env.Folders.ArtifactsPublish,
+            project,
+            GetCurrentRuntimeIdentifier(),
+            "net8.0"));
         var targetFolder = PathHelper.GetFullPath(CombinePaths(installFolder));
 
         DirectoryHelper.Copy(outputFolder, targetFolder);

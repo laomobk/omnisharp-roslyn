@@ -362,13 +362,13 @@ class C1 { }
             TestHelpers.AddProjectToWorkspace(
                 SharedOmniSharpTestHost.Workspace,
                 Path.Combine(Directory.GetCurrentDirectory(), "a.csproj"),
-                new[] { "net472" },
+                new[] { "net8.0" },
                 new[] { testFile });
 
             TestHelpers.AddProjectToWorkspace(
                 SharedOmniSharpTestHost.Workspace,
                 Path.Combine(Directory.GetCurrentDirectory(), "b.csproj"),
-                new[] { "net472" },
+                new[] { "net8.0" },
                 new[] { testFile });
 
             var requestHandler = GetRequestHandler(SharedOmniSharpTestHost);

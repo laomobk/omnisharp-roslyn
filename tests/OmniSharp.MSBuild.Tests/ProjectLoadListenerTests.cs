@@ -210,7 +210,7 @@ namespace OmniSharp.MSBuild.Tests
             Assert.ProperSuperset(expectedCapabilities, emitter.ReceivedMessages[0].ProjectCapabilities.ToHashSet());
         }
 
-        [ConditionalFact(typeof(NonMonoRuntimeOnly))]
+        [Fact]
         public async Task The_correct_sdk_version_is_emitted_NET6()
         {
             // Arrange

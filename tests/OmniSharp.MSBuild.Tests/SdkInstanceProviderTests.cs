@@ -30,7 +30,7 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void VersionString_LessThanMinimumVersion_DoesNotParse()
         {
-            var versionString = "5.0.100";
+            var versionString = "7.0.100";
 
             var parsed = SdkInstanceProvider.TryParseVersion(
                 versionString,
@@ -44,7 +44,7 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void VersionString_ReleaseVersion_DoesParse()
         {
-            var versionString = "6.0.100";
+            var versionString = "8.0.100";
 
             var parsed = SdkInstanceProvider.TryParseVersion(
                 versionString,
@@ -59,7 +59,7 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void VersionString_PreReleaseVersion_DoesParse()
         {
-            var versionString = "7.0.100-preview.2";
+            var versionString = "9.0.100-preview.2";
 
             var parsed = SdkInstanceProvider.TryParseVersion(
                 versionString,
@@ -87,7 +87,7 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void ReleaseVersion_Include()
         {
-            var sdkPath = CreateFakeSdkFolder(version: new("6.0.100"));
+            var sdkPath = CreateFakeSdkFolder(version: new("8.0.100"));
 
             var include = SdkInstanceProvider.IncludeSdkInstance(
                 sdkPath,
@@ -100,11 +100,11 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void ReleaseVersion_DoesNotMatchTargetVersion_DoNotInclude()
         {
-            var sdkPath = CreateFakeSdkFolder(version: new("6.0.100"));
+            var sdkPath = CreateFakeSdkFolder(version: new("8.0.100"));
 
             var include = SdkInstanceProvider.IncludeSdkInstance(
                 sdkPath,
-                targetVersion: new("6.0.101"),
+                targetVersion: new("8.0.101"),
                 includePrerelease: false);
 
             Assert.False(include);
@@ -113,11 +113,11 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void ReleaseVersion_MatchesTargetVersion_Include()
         {
-            var sdkPath = CreateFakeSdkFolder(version: new("6.0.101"));
+            var sdkPath = CreateFakeSdkFolder(version: new("8.0.101"));
 
             var include = SdkInstanceProvider.IncludeSdkInstance(
                 sdkPath,
-                targetVersion: new("6.0.101"),
+                targetVersion: new("8.0.101"),
                 includePrerelease: false);
 
             Assert.True(include);
@@ -126,7 +126,7 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void PreReleaseVersion_NotIncludesPrereleases_DoNotInclude()
         {
-            var sdkPath = CreateFakeSdkFolder(version: new("7.0.100-preview.2"));
+            var sdkPath = CreateFakeSdkFolder(version: new("9.0.100-preview.2"));
 
             var include = SdkInstanceProvider.IncludeSdkInstance(
                 sdkPath,
@@ -139,7 +139,7 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void PreReleaseVersion_IncludesPrereleases_Include()
         {
-            var sdkPath = CreateFakeSdkFolder(version: new("7.0.100-preview.2"));
+            var sdkPath = CreateFakeSdkFolder(version: new("9.0.100-preview.2"));
 
             var include = SdkInstanceProvider.IncludeSdkInstance(
                 sdkPath,
@@ -152,14 +152,26 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void PreReleaseVersion_TargetVersionTrumpsIncludePrereleases_Include()
         {
-            var sdkPath = CreateFakeSdkFolder(version: new("7.0.100-preview.2"));
+            var sdkPath = CreateFakeSdkFolder(version: new("9.0.100-preview.2"));
 
             var include = SdkInstanceProvider.IncludeSdkInstance(
                 sdkPath,
-                targetVersion: new("7.0.100-preview.2"),
+                targetVersion: new("9.0.100-preview.2"),
                 includePrerelease: false);
 
             Assert.True(include);
+        }
+
+        [Fact]
+        public void DotNetRoot_ContainsSdkDirectories_DiscoversThem()
+        {
+            var dotNetRoot = TestIO.GetRandomTempFolderPath();
+            var sdkPath = Path.Combine(dotNetRoot, "sdk", "8.0.128");
+            Directory.CreateDirectory(sdkPath);
+
+            var sdkDirectories = SdkInstanceProvider.GetSdkDirectories(new[] { dotNetRoot });
+
+            Assert.Contains(sdkPath, sdkDirectories);
         }
 
         [Fact]
@@ -193,7 +205,7 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void SdkPath_LessThanMinimumVersion_DoesNotGetVersion()
         {
-            var versionString = "5.0.100";
+            var versionString = "7.0.100";
             var sdkPath = CreateFakeSdkFolder(version: new(versionString));
 
             var got = SdkOverrideInstanceProvider.TryGetVersion(
@@ -208,7 +220,7 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void SdkPath_ReleaseVersion_DoesGetVersion()
         {
-            var versionString = "6.0.100";
+            var versionString = "8.0.100";
             var sdkPath = CreateFakeSdkFolder(version: new(versionString));
 
             var got = SdkOverrideInstanceProvider.TryGetVersion(
@@ -224,7 +236,7 @@ namespace OmniSharp.MSBuild.Tests
         [Fact]
         public void SdkPath_PreReleaseVersion_DoesGetVersion()
         {
-            var versionString = "7.0.100-preview.2";
+            var versionString = "9.0.100-preview.2";
             var sdkPath = CreateFakeSdkFolder(version: new(versionString));
 
             var got = SdkOverrideInstanceProvider.TryGetVersion(

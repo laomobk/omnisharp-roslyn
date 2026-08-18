@@ -53,9 +53,9 @@ namespace OmniSharp.MSBuild.Discovery.Providers
                 return false;
             }
 
-            if (version.Major < 6)
+            if (version.Major < SdkInstanceProvider.MinimumSdkMajorVersion)
             {
-                errorMessage = $"The Sdk path specified in the OmniSharp settings is not .NET 6 or higher. Reported version is '{version}'. Please update your settings and restart OmniSharp.";
+                errorMessage = $"The Sdk path specified in the OmniSharp settings is not .NET 8 or higher. Reported version is '{version}'. Please update your settings and restart OmniSharp.";
                 return false;
             }
 

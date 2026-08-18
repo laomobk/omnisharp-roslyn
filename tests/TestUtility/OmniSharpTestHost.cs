@@ -142,7 +142,7 @@ namespace TestUtility
             var projects = TestHelpers.AddProjectToWorkspace(
                 Workspace,
                 Path.Combine(folderPath, "project.csproj"),
-                new[] { "net472" },
+                new[] { "net8.0" },
                 testFiles.Where(f => f.FileName.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)).ToArray(),
                 testFiles.Where(f => !f.FileName.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
                     && !f.FileName.EndsWith(".csx", StringComparison.OrdinalIgnoreCase)

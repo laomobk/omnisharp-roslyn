@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using OmniSharp.Cake.Configuration;
@@ -38,40 +37,16 @@ namespace OmniSharp.Cake.Services
                 return string.Empty;
             }
 
-            var bakeryPath = GetLatestBakeryPath(toolPath);
-
-            if (bakeryPath == null)
-            {
-                return string.Empty;
-            }
-
-            return Path.Combine(toolPath, bakeryPath, "tools", "Cake.Bakery.exe");
+            return Directory
+                .EnumerateFiles(toolPath, "Cake.Bakery.dll", SearchOption.AllDirectories)
+                .OrderByDescending(path => path, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault() ?? string.Empty;
         }
 
         private static string GetToolPath(string rootPath, ICakeConfiguration configuration)
         {
             var toolPath = configuration.GetValue(Constants.Paths.Tools);
             return Path.Combine(rootPath, !string.IsNullOrWhiteSpace(toolPath) ? toolPath : "tools");
-        }
-
-        private static string GetLatestBakeryPath(string toolPath)
-        {
-            var directories = GetBakeryPaths(toolPath);
-
-            // TODO: Sort by semantic version?
-            return directories.OrderByDescending(x => x).FirstOrDefault();
-        }
-
-        private static IEnumerable<string> GetBakeryPaths(string toolPath)
-        {
-            foreach (var directory in Directory.EnumerateDirectories(toolPath))
-            {
-                var topDirectory = directory.Split(Path.DirectorySeparatorChar).Last();
-                if (topDirectory.StartsWith("cake.bakery", StringComparison.OrdinalIgnoreCase))
-                {
-                    yield return topDirectory;
-                }
-            }
         }
 
         private static string ResolveFromPath()
